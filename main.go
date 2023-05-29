@@ -3,9 +3,20 @@ package main
 import (
 	"log"
 	"os"
+	"path"
 )
 
+var notesDir string
+
 func main() {
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalln("Error:", err)
+	}
+
+	notesDir = path.Join(home, ".notes")
+
 	switch len(os.Args) {
 	case 1:
 		read()

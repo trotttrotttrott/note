@@ -14,12 +14,7 @@ func write(key string) {
 
 	t := time.Now()
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalln("Error:", err)
-	}
-
-	fpath := path.Join(home, ".notes", key)
+	fpath := path.Join(notesDir, key)
 
 	if _, err := os.Stat(fpath); os.IsNotExist(err) {
 		os.MkdirAll(fpath, 0700)
