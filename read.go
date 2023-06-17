@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -25,6 +26,7 @@ func read() {
 type noteFile struct {
 	name    string
 	content string
+	path    string
 }
 
 func (f noteFile) time() string {
@@ -43,6 +45,23 @@ func (f noteFile) preview() string {
 	return c
 }
 
+type editorFinishedMsg struct{ err error }
+
+func (f noteFile) edit() tea.Cmd {
+
+	editor := os.Getenv("EDITOR")
+
+	if editor == "" {
+		editor = "vim"
+	}
+
+	c := exec.Command(editor, f.path)
+
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err}
+	})
+}
+
 type noteDir struct {
 	name      string
 	noteFiles []noteFile
@@ -58,7 +77,9 @@ func (d *noteDir) loadNotes() {
 	var noteFiles []noteFile
 	for _, entry := range dir {
 
-		data, err := os.ReadFile(path.Join(notesDir, d.name, entry.Name()))
+		notePath := path.Join(notesDir, d.name, entry.Name())
+
+		data, err := os.ReadFile(notePath)
 		if err != nil {
 			log.Fatalln("Error:", err)
 		}
@@ -66,6 +87,7 @@ func (d *noteDir) loadNotes() {
 		f := noteFile{
 			name:    entry.Name(),
 			content: string(data),
+			path:    notePath,
 		}
 
 		noteFiles = append(noteFiles, f)
@@ -81,6 +103,8 @@ type model struct {
 	cursorDir    int
 	cursorFile   int
 	activeCursor string // "dir" or "file"
+
+	err error
 }
 
 func initialModel() model {
@@ -161,8 +185,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// no behavior yet
 			}
 
+		case "e":
+			switch m.activeCursor {
+			case "file":
+				return m, m.noteDirs[*m.selected].noteFiles[*&m.cursorFile].edit()
+			}
+
 		case "esc":
 			m.selected = nil
+		}
+
+	case editorFinishedMsg:
+		if msg.err != nil {
+			m.err = msg.err
 		}
 	}
 
@@ -213,11 +248,23 @@ func (m model) View() string {
 		noteFiles = strings.Join(previews, "\n\n")
 	}
 
-	return lipgloss.NewStyle().Margin(1, 2).Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			lipgloss.NewStyle().MarginRight(2).Render(noteDirs),
-			noteFiles,
+	var errMsg string
+	if m.err != nil {
+		errMsg = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("9")).
+			Render("Error: " + m.err.Error() + "\n")
+		m.err = nil
+	}
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		errMsg,
+		lipgloss.NewStyle().Margin(0, 1, 1, 2).Render(
+			lipgloss.JoinHorizontal(
+				lipgloss.Top,
+				lipgloss.NewStyle().MarginRight(2).Render(noteDirs),
+				noteFiles,
+			),
 		),
 	)
 }
