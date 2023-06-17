@@ -102,7 +102,8 @@ type model struct {
 	cursorDir   int
 	selectedDir *int
 
-	cursorFile int
+	cursorFile   int
+	selectedFile *int
 
 	activeCursor string // "dir" or "file"
 
@@ -181,10 +182,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			switch m.activeCursor {
 			case "dir":
+				m.selectedFile = nil
 				m.selectedDir = &m.cursorDir
 				m.noteDirs[*m.selectedDir].loadNotes()
 			case "file":
-				// no behavior yet
+				m.selectedFile = &m.cursorFile
 			}
 
 		case "e":
@@ -194,7 +196,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc":
-			m.selectedDir = nil
+			switch m.activeCursor {
+			case "dir":
+				m.selectedDir = nil
+			case "file":
+				m.selectedFile = nil
+			}
 		}
 
 	case editorFinishedMsg:
@@ -225,29 +232,36 @@ func (m model) View() string {
 		noteDirs += fmt.Sprintf("%s [%s] %s\n", cursorDir, checked, choice.name)
 	}
 
-	var noteFiles string
+	var noteFiles []string
 
 	if m.selectedDir != nil {
 
 		dir := m.noteDirs[*m.selectedDir]
-
-		var previews []string
 
 		sort.Slice(dir.noteFiles, func(i, j int) bool {
 			return dir.noteFiles[i].name > dir.noteFiles[j].name
 		})
 
 		for i, f := range dir.noteFiles {
-			preview := fmt.Sprintf("%s\n%s", f.time(), f.preview())
+
+			var body string
+			if m.selectedFile != nil && i == *m.selectedFile {
+				body = strings.TrimSpace(f.content)
+			} else {
+				body = f.preview()
+			}
+
 			style := lipgloss.NewStyle().BorderLeft(true).PaddingLeft(1)
+
 			if m.activeCursor == "file" && i == m.cursorFile {
 				style = style.BorderStyle(lipgloss.Border{Left: ">"})
 			} else {
 				style = style.BorderStyle(lipgloss.HiddenBorder())
 			}
-			previews = append(previews, style.Render(preview))
+			noteFiles = append(noteFiles, style.Render(
+				fmt.Sprintf("%s\n%s", lipgloss.NewStyle().Faint(true).Render(f.time()), body),
+			))
 		}
-		noteFiles = strings.Join(previews, "\n\n")
 	}
 
 	var errMsg string
@@ -265,7 +279,7 @@ func (m model) View() string {
 			lipgloss.JoinHorizontal(
 				lipgloss.Top,
 				lipgloss.NewStyle().MarginRight(2).Render(noteDirs),
-				noteFiles,
+				strings.Join(noteFiles, "\n\n"),
 			),
 		),
 	)
