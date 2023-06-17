@@ -98,10 +98,12 @@ func (d *noteDir) loadNotes() {
 
 type model struct {
 	noteDirs []noteDir
-	selected *int
 
-	cursorDir    int
-	cursorFile   int
+	cursorDir   int
+	selectedDir *int
+
+	cursorFile int
+
 	activeCursor string // "dir" or "file"
 
 	err error
@@ -162,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursorDir++
 				}
 			case "file":
-				if m.cursorFile < len(m.noteDirs[*m.selected].noteFiles)-1 {
+				if m.cursorFile < len(m.noteDirs[*m.selectedDir].noteFiles)-1 {
 					m.cursorFile++
 				}
 			}
@@ -171,7 +173,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeCursor = "dir"
 
 		case "right", "l":
-			if m.selected != nil && m.activeCursor != "file" {
+			if m.selectedDir != nil && m.activeCursor != "file" {
 				m.cursorFile = 0
 				m.activeCursor = "file"
 			}
@@ -179,8 +181,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			switch m.activeCursor {
 			case "dir":
-				m.selected = &m.cursorDir
-				m.noteDirs[*m.selected].loadNotes()
+				m.selectedDir = &m.cursorDir
+				m.noteDirs[*m.selectedDir].loadNotes()
 			case "file":
 				// no behavior yet
 			}
@@ -188,11 +190,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			switch m.activeCursor {
 			case "file":
-				return m, m.noteDirs[*m.selected].noteFiles[*&m.cursorFile].edit()
+				return m, m.noteDirs[*m.selectedDir].noteFiles[*&m.cursorFile].edit()
 			}
 
 		case "esc":
-			m.selected = nil
+			m.selectedDir = nil
 		}
 
 	case editorFinishedMsg:
@@ -216,7 +218,7 @@ func (m model) View() string {
 		}
 
 		checked := " "
-		if m.selected != nil && *m.selected == i {
+		if m.selectedDir != nil && *m.selectedDir == i {
 			checked = "x"
 		}
 
@@ -225,9 +227,9 @@ func (m model) View() string {
 
 	var noteFiles string
 
-	if m.selected != nil {
+	if m.selectedDir != nil {
 
-		dir := m.noteDirs[*m.selected]
+		dir := m.noteDirs[*m.selectedDir]
 
 		var previews []string
 
