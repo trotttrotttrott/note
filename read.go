@@ -208,6 +208,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
+		m.noteDirs[*m.selectedDir].loadNotes()
 	}
 
 	return m, nil
