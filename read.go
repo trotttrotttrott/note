@@ -74,22 +74,13 @@ func (d *noteDir) loadNotes() {
 	d.noteFiles = noteFiles
 }
 
-func (d noteDir) notePreviews() (previews []string) {
-
-	sort.Slice(d.noteFiles, func(i, j int) bool {
-		return d.noteFiles[i].name > d.noteFiles[j].name
-	})
-
-	for _, f := range d.noteFiles {
-		previews = append(previews, fmt.Sprintf("%s\n%s", f.time(), f.preview()))
-	}
-	return
-}
-
 type model struct {
 	noteDirs []noteDir
-	cursor   int
 	selected *int
+
+	cursorDir    int
+	cursorFile   int
+	activeCursor string // "dir" or "file"
 }
 
 func initialModel() model {
@@ -108,7 +99,8 @@ func initialModel() model {
 	}
 
 	return model{
-		noteDirs: noteDirs,
+		noteDirs:     noteDirs,
+		activeCursor: "dir",
 	}
 }
 
@@ -128,18 +120,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
+			switch m.activeCursor {
+			case "dir":
+				if m.cursorDir > 0 {
+					m.cursorDir--
+				}
+			case "file":
+				if m.cursorFile > 0 {
+					m.cursorFile--
+				}
 			}
 
 		case "down", "j":
-			if m.cursor < len(m.noteDirs)-1 {
-				m.cursor++
+			switch m.activeCursor {
+			case "dir":
+				if m.cursorDir < len(m.noteDirs)-1 {
+					m.cursorDir++
+				}
+			case "file":
+				if m.cursorFile < len(m.noteDirs[*m.selected].noteFiles)-1 {
+					m.cursorFile++
+				}
+			}
+
+		case "left", "h":
+			m.activeCursor = "dir"
+
+		case "right", "l":
+			if m.selected != nil && m.activeCursor != "file" {
+				m.cursorFile = 0
+				m.activeCursor = "file"
 			}
 
 		case "enter", " ":
-			m.selected = &m.cursor
-			m.noteDirs[*m.selected].loadNotes()
+			switch m.activeCursor {
+			case "dir":
+				m.selected = &m.cursorDir
+				m.noteDirs[*m.selected].loadNotes()
+			case "file":
+				// no behavior yet
+			}
 
 		case "esc":
 			m.selected = nil
@@ -155,9 +175,9 @@ func (m model) View() string {
 
 	for i, choice := range m.noteDirs {
 
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
+		cursorDir := " "
+		if m.cursorDir == i {
+			cursorDir = lipgloss.NewStyle().Faint(m.activeCursor != "dir").Render(">")
 		}
 
 		checked := " "
@@ -165,14 +185,32 @@ func (m model) View() string {
 			checked = "x"
 		}
 
-		noteDirs += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice.name)
+		noteDirs += fmt.Sprintf("%s [%s] %s\n", cursorDir, checked, choice.name)
 	}
 
 	var noteFiles string
 
 	if m.selected != nil {
 
-		noteFiles = strings.Join(m.noteDirs[*m.selected].notePreviews(), "\n\n")
+		dir := m.noteDirs[*m.selected]
+
+		var previews []string
+
+		sort.Slice(dir.noteFiles, func(i, j int) bool {
+			return dir.noteFiles[i].name > dir.noteFiles[j].name
+		})
+
+		for i, f := range dir.noteFiles {
+			preview := fmt.Sprintf("%s\n%s", f.time(), f.preview())
+			style := lipgloss.NewStyle().BorderLeft(true).PaddingLeft(1)
+			if m.activeCursor == "file" && i == m.cursorFile {
+				style = style.BorderStyle(lipgloss.Border{Left: ">"})
+			} else {
+				style = style.BorderStyle(lipgloss.HiddenBorder())
+			}
+			previews = append(previews, style.Render(preview))
+		}
+		noteFiles = strings.Join(previews, "\n\n")
 	}
 
 	return lipgloss.NewStyle().Margin(1, 2).Render(
